@@ -8,6 +8,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.security.web.SecurityFilterChain;
@@ -15,8 +16,12 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @ExtendWith(SpringExtension.class)
@@ -27,12 +32,12 @@ public class PostControllerMvcTest {
 
     @MockBean
     private PostService postService;
-    @MockBean
-    SecurityFilterChain apiSecurity;
 
     @BeforeEach
     public void  setUp() throws Exception {
-        when(postService.savePost(any(PostCreateRequest.class))).thenReturn(new Post());
+        Post post = new Post();
+        post.setContent("Test");
+        when(postService.savePost(any(PostCreateRequest.class))).thenReturn(post);
     }
 
 
@@ -45,9 +50,21 @@ public class PostControllerMvcTest {
 
     @WithMockUser
     public void test_save_post_endpoint(String content,int status) throws Exception {
-        mockMvc.perform(post("/posts")
-                .content(content).contentType(MediaType.APPLICATION_JSON)).andExpect(status().is(status));
+        mockMvc.perform(post("/posts").with(csrf())
+                .content(content).contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().is(status));
     }
+   @WithMockUser
+   @ParameterizedTest
+    @CsvSource(textBlock = """
+            {"content":"hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh"},
+            """)
+    public void   test_save_post_endpoint_returns_200_when_data_is_valid(String request) throws Exception {
+        mockMvc.perform(post("/posts").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                .content(request)).andExpect(status().is(200)).andExpect(jsonPath("$.content").isNotEmpty());
+        verify(postService).savePost(argThat((arg)->arg.getContent()!=null && arg.getCreatedAt()!=null));
+   }
 
 
 }
